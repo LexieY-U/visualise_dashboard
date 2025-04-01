@@ -86,9 +86,9 @@ def generate_exception_report(df):
     payload = {
         "inputText": summary_prompt,
         "textGenerationConfig": {
-        "maxTokenCount": 512,
-        "temperature": 0.5,
-        "topP": 0.9
+            "maxTokenCount": 512,
+            "temperature": 0.5,
+            "topP": 0.9
         },
     }
 
@@ -100,7 +100,7 @@ def generate_exception_report(df):
         response = bedrock.invoke_model(modelId=model_id, body=request)
         
     except (ClientError, Exception) as e:
-    print(f"ERROR: Can't invoke '{model_id}'. Reason: {e}")
+        print(f"ERROR: Can't invoke '{model_id}'. Reason: {e}")
     exit(1)
 
     # Decode the response body.
