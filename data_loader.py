@@ -2,12 +2,14 @@ import streamlit as st
 import pandas as pd
 import boto3
 from io import BytesIO
+import json
 
-# Use S3 bucket
+# Config AWS
 s3 = boto3.client("s3")
 bucket_name = "supply-chain-dummy-data"
 xlsx_file_name = "SupplyChain_Exceptions_Dummy_Data.xlsx"
 csv_file_name = "SupplyChain_Exceptions_Dummy_Data.csv"  # Converted file
+bedrock = boto3.client(service_name="bedrock-runtime", region_name="eu-west-2")
 
 # ---- Load Data from Excel ----
 # local version 
@@ -34,7 +36,6 @@ def convert_excel_to_csv():
     
     except Exception as e:
         st.error(f"Error converting Excel to CSV: {e}")
-
 
 def load_data():
     try:
@@ -63,3 +64,38 @@ def load_data():
     except Exception as e:
         st.error(f"Error loading data from s3: {e}")
         return None
+
+# Generates a summary of supply chain exceptions using Claude 3 Sonnet in Bedrock
+def generate_exception_report(df):  
+    # Convert data to a text prompt
+    summary_prompt = f"""
+    Please analyse the supply chain csv file uploaded in S3 bucket. 
+    Tell me how many open exceptions are there in the csv file.
+    Below is a snapshot of recent exceptions:
+    
+    {df.head().to_string()}
+    
+    Based on this data, summarize the key critical in-flight problems.
+    Highlight top recurring issues and urgent supply chain disruptions.
+    Focus on the key insights, actionable recommendations, and any data points relevant for decision-making.
+    """
+
+    # Define the Bedrock request payload
+    payload = {
+        "prompt": summary_prompt,
+        "max_tokens_to_sample": 500,
+        "temperature": 0.7
+    }
+
+    model_id = "anthropic.claude-3-sonnet-20240229"
+
+    response = bedrock.invoke_model(
+        body=json.dumps(payload),
+        modelId=model_id,
+        accept="application/json",
+        contentType="application/json"
+    )
+
+    # Extract AI-generated report
+    result = json.loads(response["body"].read())
+    return result["completion"]
