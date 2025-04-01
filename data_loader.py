@@ -18,10 +18,10 @@ csv_file_name = "SupplyChain_Exceptions_Dummy_Data.csv"  # Converted file
 # Converts Excel file to CSV and uploads it back to S3
 def convert_excel_to_csv():
     try:
-        # Fetch file from S3
-        response = s3.get_object(Bucket=bucket_name, Key=file_name)
+        # Fetch Excel file from S3
+        response = s3.get_object(Bucket=bucket_name, Key=xlsx_file_name)
         df = pd.read_excel(BytesIO(response["Body"].read()), dtype=str)
-        
+
         # Convert to CSV in memory
         csv_buffer = BytesIO()
         df.to_csv(csv_buffer, index=False, encoding="utf-8")
@@ -30,7 +30,7 @@ def convert_excel_to_csv():
         # Upload CSV to S3
         s3.put_object(Bucket=bucket_name, Key=csv_file_name, Body=csv_buffer.getvalue())
 
-        st.success(f"Converted {xlsx_file_name} to {csv_file_name} and uploaded to S3 successfully.")
+        st.success(f"Converted {xlsx_file_name} to {csv_file_name} and uploaded to S3.")
     
     except Exception as e:
         st.error(f"Error converting Excel to CSV: {e}")
@@ -46,9 +46,6 @@ def load_data():
         if csv_file_name not in file_names:
             st.warning(f"{csv_file_name} not found. Converting from Excel...")
             convert_excel_to_csv()
-            
-        response = s3.get_object(Bucket=bucket_name, Key=file_name)
-        read_file_content = response["Body"].read()
 
         # Fetch CSV file from S3
         response = s3.get_object(Bucket=bucket_name, Key=csv_file_name)
