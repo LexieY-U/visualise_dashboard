@@ -87,7 +87,7 @@ def generate_exception_report(df):
         "temperature": 0.7
     }
 
-    model_id = "anthropic.claude-3-sonnet-20240229"
+    model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
 
     response = bedrock.invoke_model(
         body=json.dumps(payload),
