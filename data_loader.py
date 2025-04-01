@@ -9,7 +9,7 @@ s3 = boto3.client("s3")
 bucket_name = "supply-chain-dummy-data"
 xlsx_file_name = "SupplyChain_Exceptions_Dummy_Data.xlsx"
 csv_file_name = "SupplyChain_Exceptions_Dummy_Data.csv"  # Converted file
-bedrock = boto3.client(service_name="bedrock-runtime", region_name="eu-west-2")
+bedrock = boto3.client(service_name="bedrock-runtime")
 
 # ---- Load Data from Excel ----
 # local version 
@@ -79,23 +79,33 @@ def generate_exception_report(df):
     Highlight top recurring issues and urgent supply chain disruptions.
     Focus on the key insights, actionable recommendations, and any data points relevant for decision-making.
     """
-
+    
+    model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
+    
     # Define the Bedrock request payload
     payload = {
-        "prompt": summary_prompt,
-        "max_tokens_to_sample": 500,
-        "temperature": 0.7
+        "inputText": summary_prompt,
+        "textGenerationConfig": {
+        "maxTokenCount": 512,
+        "temperature": 0.5,
+        "topP": 0.9
+        },
     }
 
-    model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
+    # Convert the native request to JSON.
+    request = json.dumps(payload)
 
-    response = bedrock.invoke_model(
-        body=json.dumps(payload),
-        modelId=model_id,
-        accept="application/json",
-        contentType="application/json"
-    )
+    try:
+        # Invoke the model with the request.
+        response = bedrock.invoke_model(modelId=model_id, body=request)
+        
+    except (ClientError, Exception) as e:
+    print(f"ERROR: Can't invoke '{model_id}'. Reason: {e}")
+    exit(1)
 
-    # Extract AI-generated report
-    result = json.loads(response["body"].read())
-    return result["completion"]
+    # Decode the response body.
+    model_response = json.loads(response["body"].read())
+    
+    # Extract and print the response text.
+    response_text = model_response["results"][0]["outputText"]
+    print(response_text)
