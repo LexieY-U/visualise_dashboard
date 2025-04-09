@@ -1,0 +1,125 @@
+import streamlit as st
+import json
+import pandas as pd
+import boto3
+from io import BytesIO
+from openai import OpenAI
+
+# Bedrock Claude setup
+bedrock = boto3.client(service_name="bedrock-runtime")
+model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
+
+# OpenAI setup
+openai_client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY"))
+
+def get_assistant_response(model, persona, user_input, history, df):
+    """Returns a chain-of-thought style response from selected model."""
+    
+    # Construct context
+    persona_context = {
+        "Inventory Planner": "You are a strategic inventory planner focused on forecasting and supply accuracy.",
+        "Logistics Coordinator": "You are a logistics expert concerned with timely delivery, shipping delays, and warehouse coordination.",
+        "Data Analyst": "You analyze supply chain exceptions using data and trends to generate insights.",
+    }[persona]
+
+    base_prompt = f"""
+    You are a helpful assistant. Role: {persona_context}
+
+    You have access to the following recent exception data:
+
+    {df.head().to_string(index=False)}
+
+    Chat History:
+    {format_chat_history(history)}
+
+    Now answer the user: "{user_input}"
+
+    Respond in this format:
+    ## 🧭Chain of Thought
+    <Explain your reasoning here step-by-step>
+
+    ## 🪄Final Answer
+    <Your clear, concise recommendation or conclusion>
+    """
+
+    # Choose model
+    if model == "Claude 3 (Bedrock)":
+        payload = {
+            "messages": [{"role": "user", "content": base_prompt}],
+            "max_tokens": 1024,
+            "temperature": 0.5,
+            "anthropic_version": "bedrock-2023-05-31"
+        }
+
+        try:
+            response = bedrock.invoke_model(
+                modelId=model_id,
+                body=json.dumps(payload),
+                contentType="application/json",
+                accept="application/json"
+            )
+            body = json.loads(response["body"].read())
+            return body["content"][0]["text"] if isinstance(body["content"], list) else body["content"]
+
+        except Exception as e:
+            return f"Claude Error: {e}"
+
+    elif model == "GPT-4 (OpenAI)":
+        try:
+            messages = [{"role": "system", "content": persona_context}]
+            messages += [{"role": m["role"], "content": m["content"]} for m in history]
+            messages.append({"role": "user", "content": user_input})
+
+            response = openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=messages
+            )
+            return response.choices[0].message.content
+
+        except Exception as e:
+            return f"GPT Error: {e}"
+
+def format_chat_history(history):
+    return "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in history])
+
+def render_chat_assistant():
+    df = st.session_state.get("df", None)
+    if df is None:
+        return  # Don't show chat if data isn't loaded
+
+    # Initialise state
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    # Floating chat popup
+    with st.expander("💬 Ask Supply Chain Assistant", expanded=False):
+        st.markdown("### 🚚 Hello, I'm your Supply Chain Assistant")
+        st.selectbox("Choose a role:", ["📦Inventory Planner", "🚚Logistics Coordinator", "📊Data Analyst"], key="persona")
+        st.radio("Select Model:", ["Claude 3 (Bedrock)", "GPT-4 (OpenAI)"], key="selected_model", horizontal=True)
+
+        st.divider()
+
+        # Display history
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        # User input
+        user_input = st.chat_input("Ask your question")
+        if user_input:
+            # Add user input to history
+            st.session_state.chat_history.append({"role": "user", "content": user_input})
+
+            with st.chat_message("assistant"):
+                with st.spinner("⏳Thinking..."):
+                    reply = get_assistant_response(
+                        model=st.session_state.selected_model,
+                        persona=st.session_state.persona,
+                        user_input=user_input,
+                        history=st.session_state.chat_history,
+                        df=df
+                    )
+                    st.markdown(reply)
+
+            # Save assistant reply
+            st.session_state.chat_history.append({"role": "assistant", "content": reply})
