@@ -1,16 +1,21 @@
 import streamlit as st
-import pandas as pd
 from apply_filter import apply_filters
 from config import exception_status_options, intervention_action_taken_options, exception_outcome_options
-from data_loader import load_data
+from data_loader import load_data, generate_report_and_display
 from data_utils import save_edits
 from visualisations import plot_stacked_bar_chart, plot_bar_chart, plot_exceptions_overview
+from chat_assistant import render_chat_assistant
 
-# Load data
-df = load_data()
+# Load data from s3
+st.session_state.clear()
+if "df" not in st.session_state:
+    df, s3_path = load_data()
+    if df is not None:
+        st.session_state.df = df
 
 # Streamlit Layout
 st.title("Supply Chain Exceptions Dashboard")
+render_chat_assistant()
 
 # Create tabs
 tab1, tab2, tab3 = st.tabs(["Exception Detection", "Exceptions Management", "Historic Exceptions"])
@@ -41,7 +46,7 @@ with tab1:
     st.session_state.edited_df.loc[edited_df.index] = edited_df
 
     if st.button("Save Changes", key="save_tab1"):
-        save_edits()
+        save_edits(s3_path)
 
 with tab2:
     st.header("Exceptions Management")
@@ -65,7 +70,7 @@ with tab2:
     st.session_state.edited_df.loc[edited_df.index] = edited_df
 
     if st.button("Save Changes", key="save_tab2"):
-        save_edits()
+        save_edits(s3_path)
 
 
 with tab3:
@@ -81,3 +86,7 @@ with tab3:
 
     # Display the Historic Exceptions DataFrame
     st.write(filtered_df)  # Shows all historic exceptions that have been resolved
+
+    # Add button to generate AI-powered exception report
+    if st.button("Generate Exception Report with AI", key="generate_report_tab_3"):
+        generate_report_and_display()
